@@ -2,19 +2,7 @@
 
 StageGuard is a runtime security monitor for LLM agents that inspects **every stage** of an agent's execution pipeline — prompt ingestion, retrieval/context ingestion, tool selection, parameter construction, and a final pre-execution gate — rather than only the first prompt and the final output. It combines a deterministic rule engine, a statistical anomaly detector, argument-provenance verification, and an LLM-based semantic judge under a **confidence-gated aggregation policy** that stops the least reliable layer from silently overriding the most reliable ones.
 
-Evaluated on [InjecAgent](https://github.com/uiuc-kang-lab/InjecAgent) and validated for benign-task behavior on [AgentDojo](https://github.com/ethz-spylab/agentdojo).
-
-## Key results
-
-| Defense | ASR ↓ | Hard-FPR ↓ | Utility ↑ | Latency (ms) |
-|---|---|---|---|---|
-| None (undefended) | 0.270 | 0.000 | 1.000 | 0 |
-| Prompt hardening | 0.285 | 0.000 | 1.000 | 0 |
-| Endpoint-only | 0.265 | 0.005 | 0.995 | 0.2 |
-| **StageGuard (full)** | **0.035** | 0.005 | 0.995 | 705.5 |
-
-StageGuard reduces attack success rate by 87% relative to both the undefended agent and an endpoint-only baseline, while hard-blocking only 0.5% of benign tasks, and attributes 83% of flagged actions to the correct pipeline stage (100% accuracy whenever an attack is detected at all). See the [paper](./paper/StageGuard.pdf) for full results, ablations, and limitations.
-
+Evaluated on [InjecAgent](https://github.com/uiuc-kang-lab/InjecAgent) and validated for benign-task behavior on [AgentDojo](https://github.com/ethz-spylab/agentdojo). Full results, ablations, and limitations are reported in the accompanying paper.
 
 ## How the pipeline works
 
@@ -26,53 +14,45 @@ StageGuard reduces attack success rate by 87% relative to both the undefended ag
 
 Each decision resolves to **Allow**, **Sanitize-and-Allow**, **Require Human Approval**, or **Block**, and every flagged action is logged with the stage and evidence responsible (append-only, hash-chained audit log).
 
-## Setup
+## What's in the notebook
 
-### Requirements
-- Python 3.10+
-- A GPU is strongly recommended for the local agent model (Qwen2.5-7B-Instruct); CPU will work but is slow.
-- (Optional) A [Groq](https://groq.com/) API key if using the hosted Layer-3 judge backend instead of a local model.
+The notebook (`cs-revised__6_.ipynb`) is organized as ~18 sequential, independently re-runnable cells:
 
-### Install
+1. Setup, run profile, caching, dependency install
+2. Load the local Qwen2.5-7B-Instruct agent (and optional local judge)
+3. Download InjecAgent test cases, tool definitions, and user cases
+4. Build the external `policy.yaml` (three profiles: strict/balanced/permissive) and hash it for reproducibility
+5. Tool-risk and provenance registries, plus an explicit oracle-ablation registry
+6. Layer 1 — rule sets (core/full tiers) and a benign-acceptance self-test
+7. Load the AgentDojo benign corpus (required source for Layer 2 calibration)
+8. Layer 2 — stylometric feature extraction + isolation-forest anomaly detector
+9. Provenance and data-stealing chain detector, argument-provenance scoring
+10. Action generation (stochastic decoding, request-hash caching, seed self-check)
+11. Layer 3 — local/Groq semantic judge, noisy-OR aggregation
+12. Sanitizer (sentence-level span removal driven by actual detections)
+13. Main evaluation loop across defenses and conditions
+14. Offline detector metrics and DEV-only threshold tuning
+15. Metrics: ASR, prevention-vs-none, hard-FPR, approval burden, clustered bootstrap CIs
+16. Ablation configurations (L1-only, no-provenance, uniform-blend vs. confidence-gated aggregation, etc.)
+17. AgentDojo integration for benign-task validation
+18. Extended-seed runs, per-seed variance, stage-localization confusion matrix, L3-dilution diagnostic, and final result/figure export
 
-```bash
-git clone https://github.com/<your-username>/stageguard.git
-cd stageguard
-pip install -r requirements.txt
-```
+## Running the notebook (Kaggle)
 
-### Configuration
-
-The notebook reads a profile via environment variable:
-
-```bash
-export STAGEGUARD_PROFILE=standard   # quick | standard | full
-export GROQ_API_KEY=your_key_here    # optional, only if JUDGE_BACKEND=groq
-```
-
-- `quick` — small sample sizes, for fast iteration/debugging.
-- `standard` — the configuration used for the results reported in the paper.
-- `full` — full DEV/TEST split (374/200), all three seeds, 200 bootstrap resamples.
-
-### Data
-
-The notebook automatically downloads InjecAgent test cases and tool definitions from the [official InjecAgent repo](https://github.com/uiuc-kang-lab/InjecAgent) on first run. AgentDojo requires a local install (`pip install agentdojo`) for the benign-corpus validation step; it is only used to check false-positive behavior, not adversarial ASR (see Limitations in the paper).
-
-### Running
-
-Open `notebooks/stageguard_pipeline.ipynb` in Jupyter, Kaggle, or Colab and run cells top to bottom. Each stage is cached (content-hash keyed JSONL) so repeated runs of an unchanged configuration don't re-invoke the LLM. Outputs (policy file, audit log, result tables, figures) are written to `artifacts/`.
-
-Policy thresholds and layer weights for all three profiles (strict/balanced/permissive) are defined in `artifacts/policy.yaml` after the setup cell runs, and the SHA-256 hash of the active policy is logged with every run for reproducibility.
-
-## Reproducing the paper's tables
-
-| Paper | Notebook section | Output |
-|---|---|---|
-| Table 4 (main comparison) | Cells 16–18, 20 | `artifacts/table_main_comparison.csv` |
-| Table 5 (ablations) | Cell 16 | `artifacts/table_ablation.csv` |
-| Table 6 (stage localization) | Cell 18, 22 | `artifacts/table_stage_localization.csv`, confusion matrix |
-| Figure 2 (ASR vs. latency) | Cell 24 | `artifacts/fig2_asr_latency.png` |
-| Figure 3 (ablation bar chart) | Cell 16 | `artifacts/fig3_ablation.png` |
+1. Upload the `.ipynb` file to [Kaggle](https://www.kaggle.com/code) as a new notebook, or open it directly if importing from GitHub.
+2. **Enable GPU**: Notebook settings → Accelerator → GPU (needed to run the local Qwen2.5-7B-Instruct agent at a reasonable speed).
+3. **Dependencies**: the first cell installs everything it needs at runtime from `requirements.txt` — no manual setup required.
+4. **(Optional) Groq API key**: if you want to use the hosted Layer-3 judge backend instead of a local model, add a Kaggle secret named `GROQ_API_KEY` (Add-ons → Secrets), or set it as an environment variable.
+5. **(Optional) AgentDojo**: only needed for the benign false-positive validation step; the notebook installs it automatically if listed, and degrades gracefully with a notice if unavailable.
+6. Set the run profile before executing, e.g. at the top of the setup cell:
+   ```python
+   import os
+   os.environ["STAGEGUARD_PROFILE"] = "standard"  # quick | standard | full
+   ```
+   - `quick` — small sample sizes, for fast iteration/debugging.
+   - `standard` — the configuration used for the paper's reported results.
+   - `full` — full DEV/TEST split (374/200), all three seeds, 200 bootstrap resamples.
+7. Run all cells top to bottom. Each stage is cached (content-hash keyed JSONL) so re-running an unchanged configuration doesn't re-invoke the LLM. Result tables and figures are written to the notebook's working directory (`/kaggle/working/`) and can be downloaded from the Output tab when the run finishes.
 
 ## Limitations
 
@@ -80,32 +60,6 @@ Policy thresholds and layer weights for all three profiles (strict/balanced/perm
 - AgentDojo is used only for benign false-positive validation; adversarial ASR on AgentDojo is untested pending harness integration with a locally-hosted model.
 - All results use a single agent/judge model pair (Qwen2.5-7B-Instruct); cross-model generalization is untested.
 - Results are reported on InjecAgent only; generalization to other injection styles or agent frameworks is untested.
-
-Full discussion in Section 6 of the paper.
-
-## Roadmap
-
-- [ ] Refactor the notebook into a modular `src/` package (rule engine, anomaly detector, provenance checker, aggregator, judge, evaluation harness) importable outside a notebook.
-- [ ] Close the context-ingestion detection gap.
-- [ ] Full adversarial evaluation on AgentDojo.
-- [ ] Test generalization across additional base agent/judge models.
-
-## Citation
-
-If you use StageGuard, please cite:
-
-```bibtex
-@inproceedings{stageguard2027,
-  title     = {StageGuard: A Multi-Stage Runtime Security Monitor for Agentic AI Systems},
-  author    = {Mim, Nusrat Jahan and Sagar, Md. Alif Hossain and Azam, Shifat Bin},
-  year      = {2027},
-  note      = {Preprint}
-}
-```
-
-## License
-
-This project is licensed under the MIT License — see [LICENSE](./LICENSE).
 
 ## Acknowledgments
 
