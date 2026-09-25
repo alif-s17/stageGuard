@@ -15,21 +15,6 @@ Evaluated on [InjecAgent](https://github.com/uiuc-kang-lab/InjecAgent) and valid
 
 StageGuard reduces attack success rate by 87% relative to both the undefended agent and an endpoint-only baseline, while hard-blocking only 0.5% of benign tasks, and attributes 83% of flagged actions to the correct pipeline stage (100% accuracy whenever an attack is detected at all). See the [paper](./paper/StageGuard.pdf) for full results, ablations, and limitations.
 
-## Repository structure
-
-```
-stageguard/
-├── notebooks/
-│   └── stageguard_pipeline.ipynb   # End-to-end pipeline: setup → data → detection layers → evaluation → export
-├── paper/
-│   └── StageGuard.pdf              # Paper draft
-├── artifacts/                      # Generated at runtime: policy.yaml, audit.jsonl, result tables, figures
-├── requirements.txt
-├── LICENSE
-└── README.md
-```
-
-> The current implementation lives in a single Kaggle-style notebook (`notebooks/stageguard_pipeline.ipynb`), organized into ~18 sequential, independently re-runnable cells covering setup, data loading, the five-stage pipeline, evaluation, ablations, and result export. A modular `src/` package refactor is a planned next step (see [Roadmap](#roadmap)).
 
 ## How the pipeline works
 
